@@ -26,7 +26,7 @@ Your Nginx Proxy Manager access list is now updated with new deny rules and full
 |------|----------|
 | `logs_reader_access_list.sh` | Extract unique IPs from Docker logs matching filter pattern; append new ones to `client_ips.txt` |
 | `ngnix.sh` | Update Nginx Proxy Manager access list with deny rules for all IPs in `client_ips.txt` |
-| `pipeline.sh` | Orchestrator: runs log extract, then access-list update; logs status to `pipeline_status.log` |
+| `main.sh` | Orchestrator: runs log extract, then access-list update; logs status to `pipeline_status.log` |
 | `rollback_access_list.sh` | Restore access list to a previous backup; saves safety snapshot before restoring |
 | `client_ips.txt` | Persistent, growing list of all extracted IPs; manually edit to remove or add IPs |
 | `access_list_backups/` | Auto-created backups as JSON; named `access_list_2_YYYYMMDD_HHMMSS.json` |
