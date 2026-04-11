@@ -14,7 +14,7 @@ Automates deny-list updates in Nginx Proxy Manager using suspicious IPs extracte
 
 - `logs_reader_access_list.sh`: Extracts unique client IPs from logs and appends new ones to `client_ips.txt`.
 - `ngnix.sh`: Updates Nginx Proxy Manager access list by adding deny rules for IPs in `client_ips.txt`.
-- `pipeline.sh`: Runs log extraction first, then access-list update, and writes status to `pipeline_status.log`.
+- `main.sh`: Runs log extraction first, then access-list update, and writes status to `pipeline_status.log`.
 - `rollback_access_list.sh`: Restores access list from backup JSON.
 - `client_ips.txt`: Persistent list of discovered IPs.
 - `access_list_backups/`: Auto-generated backups of access-list payloads.
@@ -44,7 +44,7 @@ nano .env
 3. (Optional) Make scripts executable:
 
 ```bash
-chmod +x logs_reader_access_list.sh ngnix.sh pipeline.sh rollback_access_list.sh
+chmod +x logs_reader_access_list.sh ngnix.sh main.sh rollback_access_list.sh
 ```
 
 ## Environment variables
@@ -65,7 +65,7 @@ Defined in `.env`:
 Run full pipeline:
 
 ```bash
-bash pipeline.sh
+bash main.sh
 ```
 
 Run only log extraction:
@@ -106,7 +106,7 @@ bash rollback_access_list.sh access_list_2_YYYYMMDD_HHMMSS.json
 
 ## Notes
 
-- `pipeline.sh` supports both `nignix.sh` and `ngnix.sh` file names for compatibility.
+- `main.sh` supports both `nignix.sh` and `ngnix.sh` file names for compatibility.
 - `.env` is ignored by git. Do not commit real credentials.
 - `client_ips.txt` grows over time; review it periodically.
 
@@ -115,4 +115,4 @@ bash rollback_access_list.sh access_list_2_YYYYMMDD_HHMMSS.json
 - Missing variable error: verify `.env` exists and all required values are set.
 - Empty extracted IP list: broaden `FILTER_PATTERN` or increase `LINES_TO_READ`.
 - API auth failure: recheck `NPM_EMAIL`, `NPM_PASSWORD`, and `NPM_URL`.
-- Script not found from pipeline: ensure scripts are in the same directory and names are unchanged.
+- Script not found from main script: ensure scripts are in the same directory and names are unchanged.

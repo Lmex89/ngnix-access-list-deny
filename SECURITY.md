@@ -39,7 +39,7 @@ Share this with other developers so they know what to configure.
    ```bash
    bash logs_reader_access_list.sh
    bash ngnix.sh
-   bash pipeline.sh
+   bash main.sh
    ```
 
 ## Security Features
