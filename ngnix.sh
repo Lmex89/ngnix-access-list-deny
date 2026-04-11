@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NPM_URL="http://127.0.0.1:81/api"
-NPM_EMAIL="bjt.mex@gmail.com"
-NPM_PASSWORD="Adesigue00"
-ACCESS_LIST_ID="2"
+# Load environment variables from .env file
+ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.env"
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Error: .env file not found at $ENV_FILE" >&2
+  echo "Please copy .env.example to .env and fill in the values" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+source "$ENV_FILE"
+
+# Validate required variables
+for var in NPM_URL NPM_EMAIL NPM_PASSWORD ACCESS_LIST_ID; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "Error: Required environment variable $var is not set" >&2
+    exit 1
+  fi
+done
+
 IP_FILE="client_ips.txt"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$SCRIPT_DIR/access_list_backups"

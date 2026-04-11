@@ -2,13 +2,31 @@
 
 set -euo pipefail
 
-container_name="lmex89-nginix-proxy-mananger-app-1"
-container_log="/data/logs/proxy-host-9_access.log"
-filter_pattern='bot|crawl|wp|env|.git|config.js|aws|docker'
+# Load environment variables from .env file
+ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.env"
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Error: .env file not found at $ENV_FILE" >&2
+  echo "Please copy .env.example to .env and fill in the values" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+source "$ENV_FILE"
+
+# Validate required variables
+for var in DOCKER_CONTAINER_NAME DOCKER_CONTAINER_LOG FILTER_PATTERN LINES_TO_READ; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "Error: Required environment variable $var is not set" >&2
+    exit 1
+  fi
+done
+
+container_name="${DOCKER_CONTAINER_NAME}"
+container_log="${DOCKER_CONTAINER_LOG}"
+filter_pattern="${FILTER_PATTERN}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 output_file="$script_dir/logs.txt"
 ip_file="$script_dir/client_ips.txt"
-lines_to_read="200"
+lines_to_read="${LINES_TO_READ}"
 
 print_usage() {
   echo "Usage: $(basename "$0") [log_file]"
