@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure essential commands are in PATH for crontab environments
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 # Load environment variables from .env file
 ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.env"
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -96,18 +99,49 @@ printf '%s\n' "$CURRENT" | jq . > "$BACKUP_FILE"
 CURRENT_DENY_IPS_JSON=$(jq -c '
   (.clients // [])
   | map(select(.directive == "deny") | .address)
-' <<< "$CURRENT")
+' <<< "$CURRENT") || {
+  echo "ERROR: Failed to extract current deny IPs from API response" >&2
+  echo "DEBUG: API Response: $(echo "$CURRENT" | head -c 500)" >&2
+  log_status "ERROR: Failed to extract current deny IPs from API response"
+  exit 1
+}
 
-DENY_RULES=$(jq -Rsc --argjson existing "$CURRENT_DENY_IPS_JSON" '
+# Validate that CURRENT_DENY_IPS_JSON is valid JSON
+if ! jq . <<< "$CURRENT_DENY_IPS_JSON" > /dev/null 2>&1; then
+  echo "ERROR: Extracted deny IPs are not valid JSON" >&2
+  echo "DEBUG: CURRENT_DENY_IPS_JSON=$CURRENT_DENY_IPS_JSON" >&2
+  log_status "ERROR: Extracted deny IPs are not valid JSON"
+  exit 1
+fi
+
+if [[ ! -f "$IP_FILE" ]]; then
+  echo "ERROR: IP file not found at $IP_FILE" >&2
+  log_status "ERROR: IP file not found at $IP_FILE"
+  exit 1
+fi
+
+DENY_RULES_FILE=$(mktemp) || {
+  echo "ERROR: Failed to create temporary file" >&2
+  log_status "ERROR: Failed to create temporary file"
+  exit 1
+}
+trap "rm -f '$DENY_RULES_FILE'" EXIT
+
+jq -Rsc --argjson existing "$CURRENT_DENY_IPS_JSON" '
   split("\n")
   | map(select(length > 0))
   | map(select(. as $ip | ($existing | index($ip) | not)))
   | map({directive:"deny", address:.})
-' "$IP_FILE") || {
+' "$IP_FILE" > "$DENY_RULES_FILE" 2>&1 || {
+  jq_error=$(cat "$DENY_RULES_FILE")
   echo "ERROR: Failed to process deny rules from $IP_FILE" >&2
-  log_status "ERROR: Failed to process deny rules from $IP_FILE"
+  echo "DEBUG: CURRENT_DENY_IPS_JSON=$CURRENT_DENY_IPS_JSON" >&2
+  echo "DEBUG: jq error: $jq_error" >&2
+  log_status "ERROR: Failed to process deny rules from $IP_FILE: $jq_error"
   exit 1
 }
+
+DENY_RULES=$(cat "$DENY_RULES_FILE")
 
 NEW_DENY_COUNT=$(jq 'length' <<< "$DENY_RULES") || {
   echo "ERROR: Failed to count new deny rules" >&2
