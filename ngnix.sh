@@ -63,11 +63,31 @@ TOKEN=$(
     -H 'Content-Type: application/json' \
     -d "{\"identity\":\"$NPM_EMAIL\",\"secret\":\"$NPM_PASSWORD\"}" \
   | jq -r '.token'
-)
+) || {
+  echo "ERROR: Failed to obtain authentication token from $NPM_URL" >&2
+  log_status "ERROR: Failed to obtain authentication token from $NPM_URL"
+  exit 1
+}
+
+if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+  echo "ERROR: Invalid token received from API" >&2
+  log_status "ERROR: Invalid token received from API"
+  exit 1
+fi
 
 CURRENT=$(curl -sS \
   -H "Authorization: Bearer $TOKEN" \
-  "$NPM_URL/nginx/access-lists/$ACCESS_LIST_ID?expand=clients,items")
+  "$NPM_URL/nginx/access-lists/$ACCESS_LIST_ID?expand=clients,items") || {
+  echo "ERROR: Failed to fetch current access list from $NPM_URL" >&2
+  log_status "ERROR: Failed to fetch current access list from $NPM_URL"
+  exit 1
+}
+
+if [[ -z "$CURRENT" || "$CURRENT" == "null" ]]; then
+  echo "ERROR: Invalid response from access list API" >&2
+  log_status "ERROR: Invalid response from access list API"
+  exit 1
+fi
 
 mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/access_list_${ACCESS_LIST_ID}_$(date '+%Y%m%d_%H%M%S').json"
@@ -83,9 +103,17 @@ DENY_RULES=$(jq -Rsc --argjson existing "$CURRENT_DENY_IPS_JSON" '
   | map(select(length > 0))
   | map(select(. as $ip | ($existing | index($ip) | not)))
   | map({directive:"deny", address:.})
-' "$IP_FILE")
+' "$IP_FILE") || {
+  echo "ERROR: Failed to process deny rules from $IP_FILE" >&2
+  log_status "ERROR: Failed to process deny rules from $IP_FILE"
+  exit 1
+}
 
-NEW_DENY_COUNT=$(jq 'length' <<< "$DENY_RULES")
+NEW_DENY_COUNT=$(jq 'length' <<< "$DENY_RULES") || {
+  echo "ERROR: Failed to count new deny rules" >&2
+  log_status "ERROR: Failed to count new deny rules"
+  exit 1
+}
 
 PAYLOAD=$(jq -n \
   --argjson c "$CURRENT" \
@@ -114,7 +142,11 @@ curl -sS -X PUT \
   "$NPM_URL/nginx/access-lists/$ACCESS_LIST_ID" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d "$PAYLOAD" | jq .
+  -d "$PAYLOAD" | jq . || {
+  echo "ERROR: Failed to update access list at $NPM_URL" >&2
+  log_status "ERROR: Failed to update access list at $NPM_URL"
+  exit 1
+}
 
 if [[ "$NEW_DENY_COUNT" -eq 0 ]]; then
   log_status "INFO: No IPs were updated in access list $ACCESS_LIST_ID"
