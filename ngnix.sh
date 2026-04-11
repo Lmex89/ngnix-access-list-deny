@@ -8,8 +8,37 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo "Please copy .env.example to .env and fill in the values" >&2
   exit 1
 fi
-# shellcheck source=/dev/null
-source "$ENV_FILE"
+
+load_env_file() {
+  local env_file="$1"
+  local line key value
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+    if [[ ! "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*= ]]; then
+      continue
+    fi
+
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    key="${key#${key%%[![:space:]]*}}"
+    key="${key%${key##*[![:space:]]}}"
+    value="${value#${value%%[![:space:]]*}}"
+    value="${value%${value##*[![:space:]]}}"
+
+    if [[ "$value" =~ ^\".*\"$ || "$value" =~ ^\'.*\'$ ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    export "$key=$value"
+  done < "$env_file"
+}
+
+load_env_file "$ENV_FILE"
 
 # Validate required variables
 for var in NPM_URL NPM_EMAIL NPM_PASSWORD ACCESS_LIST_ID; do
