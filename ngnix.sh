@@ -51,6 +51,12 @@ done
 IP_FILE="client_ips.txt"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$SCRIPT_DIR/access_list_backups"
+STATUS_LOG="$SCRIPT_DIR/pipeline_status.log"
+
+log_status() {
+  local message="$1"
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$message" >> "$STATUS_LOG"
+}
 
 TOKEN=$(
   curl -sS -X POST "$NPM_URL/tokens" \
@@ -78,6 +84,8 @@ DENY_RULES=$(jq -Rsc --argjson existing "$CURRENT_DENY_IPS_JSON" '
   | map(select(. as $ip | ($existing | index($ip) | not)))
   | map({directive:"deny", address:.})
 ' "$IP_FILE")
+
+NEW_DENY_COUNT=$(jq 'length' <<< "$DENY_RULES")
 
 PAYLOAD=$(jq -n \
   --argjson c "$CURRENT" \
@@ -107,5 +115,13 @@ curl -sS -X PUT \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "$PAYLOAD" | jq .
+
+if [[ "$NEW_DENY_COUNT" -eq 0 ]]; then
+  log_status "INFO: No IPs were updated in access list $ACCESS_LIST_ID"
+  echo "No IPs were updated in access list $ACCESS_LIST_ID"
+else
+  log_status "INFO: Updated $NEW_DENY_COUNT IP(s) in access list $ACCESS_LIST_ID"
+  echo "Updated $NEW_DENY_COUNT IP(s) in access list $ACCESS_LIST_ID"
+fi
 
 echo "Backup saved to $BACKUP_FILE"
