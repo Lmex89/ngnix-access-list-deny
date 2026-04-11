@@ -51,8 +51,8 @@ for var in NPM_URL NPM_EMAIL NPM_PASSWORD ACCESS_LIST_ID; do
   fi
 done
 
-IP_FILE="client_ips.txt"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IP_FILE="$SCRIPT_DIR/client_ips.txt"
 BACKUP_DIR="$SCRIPT_DIR/access_list_backups"
 STATUS_LOG="$SCRIPT_DIR/pipeline_status.log"
 
