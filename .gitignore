@@ -1,3 +1,4 @@
 logs.txt
 access_list_backups/*
 access_list_2_*
+.env
