@@ -7,7 +7,7 @@ Automates deny-list updates in Nginx Proxy Manager using suspicious IPs extracte
 ```bash
 cp .env.example .env          # Copy config template
 nano .env                      # Edit with real credentials and container info
-bash pipeline.sh              # Run: extract IPs, apply deny rules
+bash main.sh                  # Run: extract IPs, apply deny rules
 ```
 
 Your Nginx Proxy Manager access list is now updated with new deny rules and fully backed up.
@@ -56,7 +56,7 @@ Your Nginx Proxy Manager access list is now updated with new deny rules and full
 3. **Optional — make scripts executable**:
 
    ```bash
-   chmod +x logs_reader_access_list.sh ngnix.sh pipeline.sh rollback_access_list.sh
+   chmod +x logs_reader_access_list.sh ngnix.sh main.sh rollback_access_list.sh
    ```
 
 ## Configuration (`.env`)
@@ -86,7 +86,7 @@ Your Nginx Proxy Manager access list is now updated with new deny rules and full
 ### Full pipeline (recommended)
 
 ```bash
-bash pipeline.sh
+bash main.sh
 ```
 
 Extracts IPs from logs, applies deny rules, logs status to `pipeline_status.log`, and creates backup.
@@ -148,22 +148,22 @@ To automatically extract and update deny rules every hour:
 
 ```bash
 # Run `crontab -e` and add:
-0 * * * * cd /path/to/scripts && bash pipeline.sh >> logs/pipeline.log 2>&1
+0 * * * * cd /path/to/scripts && bash main.sh >> logs/main.log 2>&1
 ```
 
 Or every 30 minutes:
 
 ```bash
-*/30 * * * * cd /path/to/scripts && bash pipeline.sh >> logs/pipeline.log 2>&1
+*/30 * * * * cd /path/to/scripts && bash main.sh >> logs/main.log 2>&1
 ```
 
 ## Important notes
 
 - **Git safety**: `.env` is in `.gitignore` — never commit credentials. Use `.env.example` for documentation.
 - **IP list grows**: `client_ips.txt` is persistent and never auto-cleaned. Manually review and remove false positives.
-- **Script names**: `pipeline.sh` gracefully handles both `nignix.sh` and `ngnix.sh` naming for compatibility.
+- **Script names**: `main.sh` gracefully handles both `nignix.sh` and `ngnix.sh` naming for compatibility.
 - **Allow-all rule**: Scripts automatically preserve an `allow all` rule in the access list to prevent lockout.
-- **Status log**: `pipeline.sh` writes timestamped events to `pipeline_status.log` for monitoring.
+- **Status log**: `main.sh` writes timestamped events to `pipeline_status.log` for monitoring.
 
 ## Troubleshooting
 
