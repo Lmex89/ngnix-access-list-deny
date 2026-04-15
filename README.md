@@ -1,3 +1,5 @@
+> **Note**: This is a personal self-hosted project built for my own home lab environment. It is provided as-is and is not intended for enterprise or production use.
+
 # Nginx Access List Deny Automation
 
 Automates deny-list updates in Nginx Proxy Manager using suspicious IPs extracted from Docker container logs. Detects and blocks bots, crawlers, and suspicious clients via configurable regex filtering.
