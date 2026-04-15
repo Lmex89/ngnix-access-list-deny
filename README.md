@@ -15,10 +15,11 @@ Your Nginx Proxy Manager access list is now updated with new deny rules and full
 ## How it works
 
 1. **Extract**—reads recent filtered log lines from Docker container and scrapes client IPs
-2. **Deduplicate**—stores only new IPs not already in `client_ips.txt`
-3. **Apply**—adds those IPs as `deny` rules to Nginx Proxy Manager access list
-4. **Backup**—saves full access list state as JSON before applying changes
-5. **Safeties**—allow-all rule is preserved; rollback always available
+2. **Validate**—rejects malformed or invalid IPs (strict IPv4 format + octet range check)
+3. **Deduplicate**—stores only new IPs not already in `client_ips.txt`
+4. **Apply**—adds those IPs as `deny` rules to Nginx Proxy Manager access list
+5. **Backup**—saves full access list state as JSON before applying changes
+6. **Safeties**—allow-all rule is preserved; HTTP errors are caught explicitly; rollback always available
 
 ## File reference
 
@@ -99,6 +100,12 @@ Run only log extraction:
 bash logs_reader_access_list.sh
 ```
 
+Preview planned deny rules without applying them (dry-run):
+
+```bash
+bash ngnix.sh --dry-run
+```
+
 Apply deny rules without running the reader (uses existing `client_ips.txt`):
 
 ```bash
@@ -164,6 +171,8 @@ Or every 30 minutes:
 - **Script names**: `main.sh` gracefully handles both `nignix.sh` and `ngnix.sh` naming for compatibility.
 - **Allow-all rule**: Scripts automatically preserve an `allow all` rule in the access list to prevent lockout.
 - **Status log**: `main.sh` writes timestamped events to `pipeline_status.log` for monitoring.
+- **Dry-run**: Use `ngnix.sh --dry-run` to preview changes before applying them to your access list.
+- **Strict error handling**: All scripts fail on unset variables, pipeline errors (`set -Eeuo pipefail`), and catch API HTTP errors (4xx/5xx) explicitly.
 
 ## Troubleshooting
 
