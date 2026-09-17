@@ -1,5 +1,33 @@
-logs.txt
-access_list_backups/*
-access_list_2_*
+# Environment and secrets
 .env
+.env.local
+.env.*.local
+
+# Logs and runtime data
 *.log
+logs.txt
+pipeline_cron.log
+pipeline_status.log
+
+# Generated data
+client_ips.txt
+access_list_backups/
+access_list_*.json
+
+# Codegraph
+.codegraph/
+
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
