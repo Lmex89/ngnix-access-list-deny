@@ -1,63 +1,87 @@
 # AGENTS.md
 
-## Codegraph (Mandatory)
+Bash cron pipeline: scrape suspicious client IPs from Docker proxy logs, then push
+`deny` rules into a **live** Nginx Proxy Manager (NPM) access list. Four shell scripts,
+no build system, no tests, no CI.
 
-Always use codegraph tools (`codegraph_search_semantic`, `codegraph_find_symbol`, `codegraph_context_for_task`, etc.) instead of built-in search tools (`grep`, `glob`, `read`). Fall back to built-in tools only if codegraph does not return satisfactory results.
+## This touches a live system
 
-## Quick Start
-
-```bash
-cp .env.example .env && nano .env
-bash main.sh
-```
+- `ngnix.sh` and `main.sh` mutate a real NPM access list over the network. There is no
+  staging environment and no test suite — treat any edit to `ngnix.sh` as production.
+- `--dry-run` is not side-effect free: it still authenticates, `GET`s the list, and writes
+  a backup file. It only skips the final `PUT`.
+- `client_ips.txt` **is** the state. Every line in it becomes a `deny` rule on the next
+  `ngnix.sh` run. Add IPs there deliberately, never in bulk.
+- Removing a false positive = delete the line from `client_ips.txt`, then remove the rule
+  in the NPM UI. The scripts only ever add denies; they never revoke them.
+- `client_ips.txt` is tracked in git even though `.gitignore` lists it (`gitignore` does not
+  affect tracked files). Expect it to show up as modified after every pipeline run.
 
 ## Commands
 
 | Action | Command |
 |--------|---------|
-| Full pipeline | `bash main.sh` |
-| Extract IPs only | `bash logs_reader_access_list.sh` |
-| Apply denies only | `bash ngnix.sh` |
-| Preview changes | `bash ngnix.sh --dry-run` |
-| Local log file | `bash logs_reader_access_list.sh ./my_logs.txt` |
-| Rollback latest | `bash rollback_access_list.sh` |
-| Rollback specific | `bash rollback_access_list.sh access_list_2_YYYYMMDD_HHMMSS.json` |
+| Full pipeline (scrape + apply) | `bash main.sh` |
+| Scrape IPs only | `bash logs_reader_access_list.sh` |
+| Scrape from a local file (no Docker) | `bash logs_reader_access_list.sh ./fixture.log` |
+| Preview pending denies | `bash ngnix.sh --dry-run` |
+| Apply denies from existing `client_ips.txt` | `bash ngnix.sh` |
+| Roll back latest backup | `bash rollback_access_list.sh` |
+| Roll back a specific backup | `bash rollback_access_list.sh access_list_2_YYYYMMDD_HHMMSS.json` |
 
-## Critical Safety Features
+Verification (no CI exists, `shellcheck` is **not** installed):
 
-- **Strict error handling**: All scripts use `set -Eeuo pipefail` with ERR traps - they fail fast on any error
-- **Allow-all preservation**: Scripts automatically ensure an `allow all` rule exists to prevent lockout
-- **Auto-backup**: Every update creates `access_list_backups/access_list_{ID}_{TIMESTAMP}.json`
-- **Rollback safety**: Rollback saves current state as `access_list_{ID}_before_rollback_{TIMESTAMP}.json` before restoring
+```bash
+bash -n main.sh ngnix.sh rollback_access_list.sh logs_reader_access_list.sh
+```
 
-## Key Quirks
+To exercise scraping without Docker or NPM, point the reader at a fixture containing lines
+like `[Client 203.0.113.9]`. It appends only IPs not already in `client_ips.txt` — use a
+temp copy of the repo if you must not pollute it.
 
-- **Filename**: Script supports both `nignix.sh` and `ngnix.sh` (main.sh handles typo)
-- **Credentials**: `.env` is gitignored - never commit real values
-- **IP list is persistent**: `client_ips.txt` is append-only and never auto-cleaned - manually remove false positives
-- **Log format**: Extracts IPs from `[Client IP]` pattern in logs - validate your log format matches
-- **Cron compatibility**: `ngnix.sh` sets explicit PATH for cron environments
-- **Dry-run**: Always test with `ngnix.sh --dry-run` before applying changes
+## How the pieces fit
 
-## Dependencies
+- `main.sh` → `logs_reader_access_list.sh`, then `ngnix.sh`. Both child failures abort the
+  pipeline and are recorded in `pipeline_status.log`.
+- Reader: `docker exec … grep -iE "$FILTER_PATTERN" "$DOCKER_CONTAINER_LOG" | tail -n "$LINES_TO_READ"`
+  → overwrites `logs.txt` → extracts `[Client <ipv4>]` → validates octets → appends new IPs.
+  `LINES_TO_READ` counts matching lines, not raw log lines.
+- Applier: auth `POST /tokens` → `GET access-lists/{id}?expand=clients,items` → JSON backup →
+  diff against existing `deny` entries → `PUT`. The payload rebuilds `items` with blanked
+  passwords (the API never returns them) and always re-adds `allow all`; it dedupes clients
+  by `directive|address`. Dropping either behavior can lock you out or wipe basic-auth users.
+  It also pins `PATH` to standard system dirs at the top, which is what makes it cron-safe.
+- Each script resolves its own `SCRIPT_DIR`, so cwd never matters, and each loads `.env`
+  from the repo root with a hand-rolled `load_env_file` loop — **not** `source`. So no shell
+  expansion in `.env` values. Adding a new required variable means adding it to the
+  per-script validation `for var in …` loop too.
+  - Reader requires: `DOCKER_CONTAINER_NAME`, `DOCKER_CONTAINER_LOG`, `FILTER_PATTERN`, `LINES_TO_READ`
+  - `ngnix.sh` / rollback require: `NPM_URL`, `NPM_EMAIL`, `NPM_PASSWORD`, `ACCESS_LIST_ID`
 
-- `bash`, `curl`, `jq`, Docker CLI
-- Network access to Nginx Proxy Manager API
+## Do not read or glob these
 
-## Environment Variables
+Runtime artifacts, gitignored, huge:
 
-| Variable | Description |
-|----------|-------------|
-| `NPM_URL` | API base URL (e.g., `http://127.0.0.1:81/api`) |
-| `NPM_EMAIL` | API login email |
-| `NPM_PASSWORD` | API login password |
-| `ACCESS_LIST_ID` | Access list ID to modify |
-| `DOCKER_CONTAINER_NAME` | Container with access log |
-| `DOCKER_CONTAINER_LOG` | Log path inside container |
-| `FILTER_PATTERN` | Regex to filter log entries |
-| `LINES_TO_READ` | Number of lines to process |
+- `pipeline_cron.log` — ~854 MB. Never `cat`/`grep` it. `tail -n 50` at most.
+- `pipeline_status.log` — multi-MB; `tail -n 20` is enough.
+- `access_list_backups/` — ~11,000 files. Never `ls`/glob it; list with a narrow
+  `access_list_${ACCESS_LIST_ID}_*.json` pattern or `find … | sort | tail -1`.
+- `logs.txt` — overwritten on every no-arg reader run; don't edit it by hand.
+- `.agents/` and `skills-lock.json` — untracked third-party skill installs, unrelated to the
+  automation.
 
-## Testing & CI
+## Naming quirk
 
-- No tests or CI workflows currently exist (see CHECKLIST.md for planned improvements)
-- Scripts use strict bash error handling but have no automated test coverage
+`ngnix.sh` (misspelled) is the real, canonical filename. `main.sh` probes for `nignix.sh`
+first, then `ngnix.sh`, so both work — don't "fix" the typo without updating `main.sh`.
+
+## Codegraph
+
+This repo has a `.codegraph/` index. The only tool exposed in this session is
+`codegraph_explore`; the older `codegraph_search_semantic` / `codegraph_find_symbol` names no
+longer exist. With four ~150-line shell scripts, plain `Read` is usually faster.
+
+## See also
+
+`README.md` documents every env var and cron setup. `CHECKLIST.md` lists planned hardening
+(deny-count guard, shellcheck CI, fixture tests) that does not exist yet — don't assume it.

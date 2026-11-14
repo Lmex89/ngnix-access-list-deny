@@ -21,7 +21,7 @@ Your Nginx Proxy Manager access list is now updated with new deny rules and full
 3. **Deduplicate**—stores only new IPs not already in `client_ips.txt`
 4. **Apply**—adds those IPs as `deny` rules to Nginx Proxy Manager access list
 5. **Backup**—saves full access list state as JSON before applying changes
-6. **Safeties**—allow-all rule is preserved; HTTP errors are caught explicitly; rollback always available
+6. **Safeties**—deny rules are placed before allow rules, allow-all is preserved, HTTP errors are caught explicitly, and rollback is available
 
 ## File reference
 
@@ -148,6 +148,7 @@ bash rollback_access_list.sh ./access_list_backups/access_list_2_20260410_121530
 
 - **Auto-backup on update**: Every time `ngnix.sh` runs, it saves the full current access list to `access_list_backups/` with timestamp.
 - **Safety backup before restore**: When `rollback_access_list.sh` runs, it saves current state before restoring from backup.
+- **Rule order on restore**: Rollback restores the backup's original order. Older backups may put allow rules before deny rules; check the order after restoring.
 - **Backup format**: Plain JSON, human-readable, includes all rules, items, and metadata.
 - **Never deleted**: Backups are kept indefinitely; manually clean up old ones or add retention to `.gitignore`.
 

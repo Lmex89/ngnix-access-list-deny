@@ -249,6 +249,7 @@ main() {
       (($c.clients // []) | map({directive: .directive, address: .address}))
       + $d
       | unique_by(.directive + "|" + .address)
+      | sort_by(if .directive == "deny" then 0 else 1 end)
     )
   }
   | if any(.clients[]; .directive == "allow" and .address == "all")
